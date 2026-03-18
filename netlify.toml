@@ -1,0 +1,17 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[functions]
+  directory = "netlify/functions"
+
+# Rewrite /api/* to the Netlify function
+[[redirects]]
+  from = "/api/radius-import"
+  to = "/.netlify/functions/radius-import"
+  status = 200
+
+[[redirects]]
+  from = "/api/idx-listings"
+  to = "/.netlify/functions/idx-listings"
+  status = 200
