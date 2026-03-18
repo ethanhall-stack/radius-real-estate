@@ -144,7 +144,7 @@ export default defineConfig(({ mode }) => {
           rewrite: () => '/v3.0/clients/import',
           configure: (proxy) => {
             proxy.on('proxyReq', (proxyReq) => {
-              proxyReq.setHeader('secure-id', env.VITE_RADIUS_SECURE_ID ?? '')
+              proxyReq.setHeader('secure-id', env.RADIUS_SECURE_ID ?? '')
             })
           },
         },

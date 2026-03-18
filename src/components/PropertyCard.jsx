@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { BedDouble, Bath, Maximize, Heart } from 'lucide-react'
 import { sendPropertyInterest, getLeadIdentity } from '../services/webhook'
 
@@ -18,15 +17,19 @@ function formatSqft(sqft) {
   return sqft.toLocaleString()
 }
 
-export default function PropertyCard({ property, onClick }) {
+export default function PropertyCard({ property, onClick, isSaved = false, onSaveToggle, onLoginRequired }) {
   const { address, city, state, price, beds, baths, sqft, tag, image } = property
-  const [saved, setSaved] = useState(false)
 
   const handleFavorite = (e) => {
     e.stopPropagation()
-    const next = !saved
-    setSaved(next)
-    if (next) sendPropertyInterest(property) // no-op if no lead identity yet
+    const { name, email } = getLeadIdentity()
+    if (!name || !email) {
+      onLoginRequired?.()
+      return
+    }
+    const next = !isSaved
+    onSaveToggle?.(property.id, next)
+    if (next) sendPropertyInterest(property)
   }
 
   return (
@@ -52,12 +55,12 @@ export default function PropertyCard({ property, onClick }) {
         {/* Favorite button */}
         <button
           onClick={handleFavorite}
-          title={saved ? 'Remove from saved' : 'Save property'}
+          title={isSaved ? 'Remove from saved' : 'Save property'}
           className="absolute top-4 right-4 w-8 h-8 bg-white/90 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-white"
         >
           <Heart
             size={14}
-            className={saved ? 'fill-gold text-gold' : 'text-stone-400'}
+            className={isSaved ? 'fill-gold text-gold' : 'text-stone-400'}
           />
         </button>
 

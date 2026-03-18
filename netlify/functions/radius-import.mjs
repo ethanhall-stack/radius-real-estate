@@ -7,7 +7,7 @@ export default async (request) => {
     return new Response('Method not allowed', { status: 405 })
   }
 
-  const secureId = process.env.RADIUS_SECURE_ID
+  const secureId = process.env.RADIUS_SECURE_ID || process.env.VITE_RADIUS_SECURE_ID
   if (!secureId) {
     console.error('[radius-import] RADIUS_SECURE_ID env var is not set in Netlify')
     return new Response(JSON.stringify({ error: 'Server misconfigured' }), {

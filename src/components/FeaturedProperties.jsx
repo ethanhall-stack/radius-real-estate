@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { ArrowRight } from 'lucide-react'
 import PropertyCard from './PropertyCard'
 import PropertyModal from './PropertyModal'
+import LeadCaptureModal from './LeadCaptureModal'
 import { fetchListings } from '../services/idx'
 import { properties as mockProperties } from '../data/properties'
 
@@ -17,6 +18,8 @@ export default function FeaturedProperties() {
   const [error, setError]                   = useState(null)
   const [searchParams, setSearchParams]     = useState({})
   const [selectedProperty, setSelectedProperty] = useState(null)
+  const [captureProperty, setCaptureProperty]   = useState(null)
+  const [savedIds, setSavedIds]                 = useState(new Set())
 
   const load = useCallback(async (city, search, skip, append) => {
     skip === 0 ? setLoading(true) : setLoadingMore(true)
@@ -125,7 +128,18 @@ export default function FeaturedProperties() {
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-10">
               {properties.map((property) => (
-                <PropertyCard key={property.id} property={property} onClick={() => setSelectedProperty(property)} />
+                <PropertyCard
+                  key={property.id}
+                  property={property}
+                  onClick={() => setSelectedProperty(property)}
+                  isSaved={savedIds.has(property.id)}
+                  onSaveToggle={(id, next) => setSavedIds((prev) => {
+                    const s = new Set(prev)
+                    next ? s.add(id) : s.delete(id)
+                    return s
+                  })}
+                  onLoginRequired={() => setCaptureProperty(property)}
+                />
               ))}
               {properties.length === 0 && (
                 <p className="col-span-3 text-center text-stone-400 py-12 text-sm tracking-wide">
@@ -151,6 +165,15 @@ export default function FeaturedProperties() {
         <PropertyModal
           property={selectedProperty}
           onClose={() => setSelectedProperty(null)}
+        />
+      )}
+
+      {/* Lead Capture Modal — shown when unauthenticated user tries to favorite */}
+      {captureProperty && (
+        <LeadCaptureModal
+          property={captureProperty}
+          onSaved={(id) => setSavedIds((prev) => new Set([...prev, id]))}
+          onClose={() => setCaptureProperty(null)}
         />
       )}
     </section>
