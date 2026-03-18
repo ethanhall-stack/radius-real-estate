@@ -46,17 +46,27 @@ export default defineConfig(({ mode }) => {
   }
 
   async function devFetchProperties(params, token) {
-    const filters = [`StandardStatus eq 'Active'`, `ListPrice ge ${params.minPrice || 500000}`, `ListPrice le ${params.maxPrice || 50000000}`, `BedroomsTotal ge 1`]
-    if (params.city)        filters.push(`City eq '${params.city.trim()}'`)
-    if (params.beds)        filters.push(`BedroomsTotal ge ${params.beds}`)
+    const top  = parseInt(params.top  || 6)
+    const skip = parseInt(params.skip || 0)
+    // Fetch 4× as many rows so deduplication still yields a full page
+    const fetchTop = Math.min((skip + top) * 4, 200)
+
+    const filters = [
+      `StandardStatus eq 'Active'`,
+      `StateOrProvince eq 'CA'`,
+      `ListPrice ge ${params.minPrice || 500000}`,
+      `ListPrice le ${params.maxPrice || 50000000}`,
+      `BedroomsTotal ge 1`,
+    ]
+    if (params.city)               filters.push(`City eq '${params.city.trim()}'`)
+    if (params.beds)               filters.push(`BedroomsTotal ge ${params.beds}`)
     if (params.leaseOnly === 'true') filters.push(`contains(PropertyType,'Lease')`)
     const mapped = PROPERTY_TYPE_MAP[params.propertyType]
     if (mapped) filters.push(`PropertySubType eq '${mapped}'`)
 
     const url = new URL(`${API_BASE}/Property`)
     url.searchParams.set('$filter',     filters.join(' and '))
-    url.searchParams.set('$top',        params.top  || '12')
-    url.searchParams.set('$skip',       params.skip || '0')
+    url.searchParams.set('$top',        String(fetchTop))
     url.searchParams.set('$select',     'ListingKey,UnparsedAddress,City,StateOrProvince,ListPrice,BedroomsTotal,BathroomsTotalInteger,LivingArea,StandardStatus,PropertySubType,DaysOnMarket,PropertyType,PublicRemarks')
     url.searchParams.set('$count',      'true')
     url.searchParams.set('$ignorenulls','true')
@@ -110,16 +120,20 @@ export default defineConfig(({ mode }) => {
     configureServer(server) {
       server.middlewares.use('/api/idx-listings', async (req, res) => {
         try {
-          const params = Object.fromEntries(new URLSearchParams(req.url.split('?')[1] || ''))
-          const token  = await getDevToken()
+          const params   = Object.fromEntries(new URLSearchParams(req.url.split('?')[1] || ''))
+          const top      = parseInt(params.top  || 6)
+          const skip     = parseInt(params.skip || 0)
+          const token    = await getDevToken()
           const listingsData = await devFetchProperties(params, token)
           const rawProps     = listingsData.value || []
-          const listingKeys  = rawProps.map((p) => p.ListingKey).filter(Boolean)
-          const mediaMap     = await devFetchMedia(listingKeys, token)
-          const allProps     = rawProps.map((p, i) => normalizeProperty(p, mediaMap, i))
-          const seen         = new Set()
-          const properties   = allProps.filter((p) => { const k = `${p.address}|${p.price}`; if (seen.has(k)) return false; seen.add(k); return true })
-          const body = JSON.stringify({ properties, total: listingsData['@odata.count'] || listingsData['@odata.totalCount'] || properties.length })
+          // Deduplicate first, then fetch media only for the page we'll return
+          const seenKeys = new Set()
+          const uniqueRaw  = rawProps.filter((p) => { const k = `${p.UnparsedAddress}|${p.ListPrice}`; if (seenKeys.has(k)) return false; seenKeys.add(k); return true })
+          const pageRaw    = uniqueRaw.slice(skip, skip + top)
+          const mediaMap   = await devFetchMedia(pageRaw.map((p) => p.ListingKey).filter(Boolean), token)
+          const properties = pageRaw.map((p, i) => normalizeProperty(p, mediaMap, i))
+          const total      = listingsData['@odata.count'] || listingsData['@odata.totalCount'] || uniqueRaw.length
+          const body = JSON.stringify({ properties, total })
           res.setHeader('Content-Type', 'application/json')
           res.setHeader('Cache-Control', 'public, max-age=300')
           res.end(body)
